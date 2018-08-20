@@ -77,16 +77,16 @@ elif len(sys.argv) > 5:
     maxBuiltRatio = float(sys.argv[8])
     forceEachYear = to_bool(float(sys.argv[9]))
     densifyOld = to_bool(float(sys.argv[10]))
-    maximumDensity = to_bool(float(sys.argv[11]))
-    winSize = round(float(sys.argv[12]))
-    minContig = float(sys.argv[13])
-    maxContig = float(sys.argv[14])
-    sirene =  round(float(sys.argv[15]))
-    transport =  round(float(sys.argv[16]))
-    routes =  round(float(sys.argv[17]))
-    ecologie =  round(float(sys.argv[18]))
-    seed = round(float(sys.argv[19]))
-    #snaps or tiffs or verbose = to_bool(float(sys.argv[20]))
+    winSize = round(float(sys.argv[11]))
+    minContig = float(sys.argv[12])
+    maxContig = float(sys.argv[13])
+    sirene =  round(float(sys.argv[14]))
+    transport =  round(float(sys.argv[15]))
+    routes =  round(float(sys.argv[16]))
+    ecologie =  round(float(sys.argv[17]))
+    seed = round(float(sys.argv[18]))
+    tiffs = to_bool(float(sys.argv[19]))
+    # or snaps or verbose..
 
 ### Valeurs de paramètres par défaut ###
 if 'finalYear' not in globals():

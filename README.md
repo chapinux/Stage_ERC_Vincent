@@ -59,21 +59,27 @@ Deux paramètres au minimum :
 | scenario             | reduction | tendanciel | string | tendanciel        | Scénario de consommation d’espace (réduction, stable, tendanciel)                                                     |
 | pluPriority          | False     | True       | bool   | True              | Utilisation du PLU pour peupler les ZAU en priorité                                                                   |
 | buildNonRes          | False     | True       | bool   | True              | Pour simuler la construction au sol de bâtiments non résidentiels (en utilisant un taux de résidentiel par IRIS)      |
-| maxBuiltRatio        | 50        | 100        | %      | 80                | Taux maximal de la surface bâtie au sol d’une cellule                                                                 |
 | exclusionRatio       | 0         | 0.8        | float  | 0.5               | Taux pour exclure de la couche d'intérêt les cellules déjà artificialisées (remplace densifyGround)                   |
-| densifyOld           | False     | True       | bool   | False             | Pour densifier en hauteur le bâti pré-existant si besoin en fin de simulation                                         |
+| maxBuiltRatio        | 50.0      | 100.0      | %      | 80                | Taux maximal de la surface bâtie au sol d’une cellule                                                                 |
 | forceEachYear        | False     | True       | bool   | True              | Pour essayer de loger tout le monde en densifiant en hauteur à chaque tour (souvent nécessaire depuis le fitting)     |
-| winSize              | 3         | 7          | pixel  | 3                 | Taille en pixels du côté de la fenêtre glissante pour contraindre la contiguïté                                       |
-| minContig            | 0         | 0.33       | float  | 0.1               | Taux minimal de cellules urbanisées dans le voisinage pour construction dans une cellule vide                         |
-| maxContig            | 0.5       | 1          | float  | 0.8               | Taux maximal de cellules urbanisées dans le voisinage pour construction dans une cellule vide                         |
+| densifyOld           | False     | True       | bool   | False             | Pour autoriser à augmenter la surface plancher dans des cellules urbanisées avant le début de la simulation           |
+| winSize              | 3         | 9          | pixel  | 3                 | Taille en pixels du côté de la fenêtre glissante pour calcul de la somme ou de la moyenne des valeurs voisines        |
+| minContig            | 0         | 0.3        | float  | 0.1               | Nombre minimal de cellules urbanisées contiguës pour urbanisation d’une cellule vide                                  |
+| maxContig            | 0.6       | 1          | float  | 0.8               | Nombre maximal de cellules urbanisées contiguës pour urbanisation d’une cellule vide                                  |
+| sirene               | 0         | MaxInt     | Int    | 3                 | Poids en lien avec la présence d'aménités                                                                             |
+| transport            | 0         | MaxInt     | Int    | 2                 | Poids en lien avec la présence de transports en commun                                                                |
+| routes               | 0         | MaxInt     | Int    | 3                 | Poids en lien avec la présence de routes                                                                              |
+| ecologie             | 0         | MaxInt     | Int    | 2                 | Poids diminuant l'intérêt d'une celule en fonction de l'intéret écologique                                            |
+| seed                 | 0         | MaxInt     | Int    | 42                | Graine du générateur de nombres aléatoires                                                                            |
 | tiffs                | False     | True       | bool   | True              | Indique si les tiffs sont sauvés en sortie                                                                            |
 | snaps                | False     | True       | bool   | False             | Pour enregistrer des instantanés chaque année (et générer des GIF)                                                    |
-| verbose             | False     | True       | bool   | False             | Pour des messages détaillés sur les erreurs + statistiques sur le peuplement et la construction chaque année (debug)  |
+| verbose              | False     | True       | bool   | False             | Pour des messages détaillés sur les erreurs + statistiques sur le peuplement et la construction chaque année (debug)  |
 
 Usage :
 ```shell
     In this version designed for OpenMole, the boolean are floats that are set to true if value > 0.5
-    ./simulate.py  /prepared_34/ /tmp/tmp/  0.5 tendanciel 1 0  1  50.0 0 0  3 0.3 0.5 0
+    ./simulate.py '/prepared_34' /tmp/tmp/ 0.5 1 1 1 0.3 50.0 1 0 3 0.2 0.7 3 2 3 2 42 0
+
 ```
 
 Dépendances pour python3 :
