@@ -140,6 +140,9 @@ if minContig > maxContig:
     print("Error : maxContig should be higher than minContig !")
     sys.exit()
 
+# Intialisation de la seed du RNG
+# np.random.seed(seed)
+
 def parseDistrib(file, type=None, fit=True):
     poids = {}
     for i in range(nbIris):
@@ -225,12 +228,20 @@ def winMean(array, row, col, size=3):
         value = s / (size * size)
     return value
 
+# Pour générer un raster de contiguïté moyenne
+def contigArray(array, size=3):
+    output = np.zeros([rows, cols], np.float32)
+    for r in range(rows):
+        for c in range(cols):
+            output[r-1][c-1] = winMean(array, r-1, c-1, size)
+    return output
+
 # Artificialisation d'une surface cellule vide ou déjà urbanisée (dans ce cas on ne vérifie pas la contiguité)
-def expand(row, col, new=True):
+def expand(row, col, new=False, urbArray=None):
     ss = 0
     id = irisId[row][col]
     if new:
-        contig = winMean(urb, row, col, winSize)
+        contig = winMean(urbArray, row, col, winSize)
         if contig and minContig < contig <= maxContig:
             ss = chooseArea(id, row, col)
             if ss > 0:
@@ -303,10 +314,10 @@ def urbanize(pop, srfMax, zau=False):
         if (row > 0 and col > 0) and capaSol[row][col] > 0:
             if urb[row][col] == 0 and tmpUrb[row][col] == 0:
                 # Pour ouvrir une nouvelle cellule à l'urbanisation
-                ss = expand(row, col)
+                ss = expand(row, col, new=True, urbArray=np.where(tmpUrb == 1, 1, urb))
             else:
                 # Sinon on construit à côté d'autres bâtiments
-                ss = expand(row, col, new=False)
+                ss = expand(row, col)
             if ss > 0 :
                 # Les fonctions retournent 0 si quelque chose empêche d'urbaniser la cellule
                 if buildNonRes:
