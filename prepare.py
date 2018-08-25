@@ -1809,7 +1809,7 @@ with (project/(strftime('%Y%m%d%H%M') + '_log.txt')).open('w') as log:
         # Rasterisations
         argList = [
             (workspace/'data'/pixResStr/'stat_iris.shp', project/'iris_id.tif', 'UInt8', 'ID_IRIS'),
-            (workspace/'data'/pixResStr/'stat_iris.shp', project/'iris_ssr_med.tif', 'UInt16', 'ssr_med'),
+            # (workspace/'data'/pixResStr/'stat_iris.shp', project/'iris_ssr_med.tif', 'UInt16', 'ssr_med'),
             (workspace/'data'/pixResStr/'stat_iris.shp', project/'iris_tx_ssr.tif', 'Float32', 'tx_ssr'),
             (workspace/'data'/pixResStr/'stat_iris.shp', project/'iris_m2_hab.tif', 'UInt16', 'm2_hab'),
             (workspace/'data'/pixResStr/'stat_grid.shp', project/'demographie.tif', 'UInt16', 'pop'),
@@ -1889,7 +1889,8 @@ with (project/(strftime('%Y%m%d%H%M') + '_log.txt')).open('w') as log:
         # Traitement de l'intérêt écologique
         if (workspace/'data'/pixResStr/'tif/ecologie.tif').exists():
             ecologie = to_array(workspace/'data'/pixResStr/'tif/ecologie.tif', np.float32)
-            ecologie = np.where((ecologie == 0), 1, 1 - ecologie)
+            ecologie = np.where(ecologie == 0, 0, 1 - ecologie)
+            ecologie = np.where(restriction == 1, 0, ecologie)
             to_tif(ecologie, 'float32', proj, geot, project/'interet/non-importance_ecologique.tif')
         else:
             rasterize(workspace/'data/ocsol.shp', project/'interet/non-importance_ecologique.tif', 'Float32', 'interet')

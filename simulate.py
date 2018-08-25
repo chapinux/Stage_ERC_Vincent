@@ -635,7 +635,8 @@ with (project/'log.txt').open('w') as log, (project/'output/mesures.csv').open('
         popNouvCount = popNouv.sum()
         expansionSum = expansion.sum()
         builtCellsRatio = expansionSum / totalCapacity
-        impactEnv = round((srfSolNouv * (1 - eco)).sum() * builtCellsRatio)
+        impactEnv = srfSolNouv * (1 - eco) * builtCellsRatio
+        cumImpact = round((srfSolNouv * (1 - eco)).sum() * builtCellsRatio)
         if tiffs :
             to_tif(heatMap, 'byte', proj, geot, project/'output/choices_heatmap.tif')
             to_tif(urb, 'uint16', proj, geot, project/('output/urbanisation_' + str(finalYear) + '.tif'))
@@ -644,6 +645,7 @@ with (project/'log.txt').open('w') as log, (project/'output/mesures.csv').open('
             to_tif(demographie, 'uint16', proj, geot, project/('output/demographie_' + str(finalYear) + '.tif'))
             to_tif(ratioPlaSol, 'float32', proj, geot, project/('output/ratio_plancher_sol_' + str(finalYear) + '.tif'))
             to_tif(txArtifFinal, 'float32', proj, geot, project/('output/taux_artif_' + str(finalYear) + '.tif'))
+            to_tif(impactEnv, 'float32', proj, geot, project/('output/impact_envionnemental.tif'))
             to_tif(expansion, 'byte', proj, geot, project/'output/expansion.tif')
             to_tif(srfSolNouv, 'uint16', proj, geot, project/'output/surface_sol_construite.tif')
             to_tif(srfPlaNouv, 'uint16', proj, geot, project/'output/surface_plancher_construite.tif')
@@ -667,7 +669,7 @@ with (project/'log.txt').open('w') as log, (project/'output/mesures.csv').open('
         mesures.write("Built floor area, " + str(srfPlaNouv.sum()) + "\n")
         mesures.write("Cells open to urbanisation, " + str(expansionSum) + "\n")
         mesures.write("Average artificialisation rate, " + str(txArtifMoyen) + "\n")
-        mesures.write("Cumulated environnemental impact, " + str(int(impactEnv)) + "\n")
+        mesures.write("Cumulated environnemental impact, " + str(int(cumImpact)) + "\n")
         mesures.write("Ground-densified cells count, " + str(dsfSol) + "\n")
         mesures.write("Floor-densified cells count, " + str(dsfPla) + "\n")
 
