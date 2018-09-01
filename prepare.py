@@ -163,7 +163,7 @@ else:
     print("Department " + dpt + " isn't part of the current study area !")
     sys.exit()
 
-if not 100 >= pixRes >= 20:
+if not 200 >= pixRes >= 20:
     print('Pixel size should be between 20m and 100m')
     sys.exit()
 
@@ -1213,7 +1213,7 @@ with (project/(strftime('%Y%m%d%H%M') + '_log.txt')).open('w') as log:
                     str(workspace/'data/ecologie.tif'), str(localData/'ecologie.tif'),
                     format='GTiff', outputType=gdal.GDT_Float32,
                     xRes=pixRes, yRes=pixRes,
-                    resampleAlg='near',
+                    resampleAlg='max',
                     srcSRS='EPSG:2154', dstSRS='EPSG:3035'
                 )
 
