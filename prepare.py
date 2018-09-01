@@ -1213,7 +1213,7 @@ with (project/(strftime('%Y%m%d%H%M') + '_log.txt')).open('w') as log:
                     str(workspace/'data/ecologie.tif'), str(localData/'ecologie.tif'),
                     format='GTiff', outputType=gdal.GDT_Float32,
                     xRes=pixRes, yRes=pixRes,
-                    resampleAlg='cubicspline',
+                    resampleAlg='near',
                     srcSRS='EPSG:2154', dstSRS='EPSG:3035'
                 )
 
@@ -1525,9 +1525,7 @@ with (project/(strftime('%Y%m%d%H%M') + '_log.txt')).open('w') as log:
                 'indif': workspace/'data/2014_bati/bati_indifferencie.shp',
                 'indus': workspace/'data/2014_bati/bati_industriel.shp',
                 'remarq': workspace/'data/2014_bati/bati_remarquable.shp',
-                'surfac': workspace/'data/2014_bati/construction_surfacique.shp',
-                'aerodr': workspace/'data/2014_bati/piste_aerodrome.shp',
-                'sport': workspace/'data/2014_bati/terrain_sport.shp'
+                'aerodr': workspace/'data/2014_bati/piste_aerodrome.shp'
             }
             argList = []
             for k, v in buildStatDic.items():
@@ -1573,17 +1571,19 @@ with (project/(strftime('%Y%m%d%H%M') + '_log.txt')).open('w') as log:
             grid = QgsVectorLayer(str(workspace/'data'/pixResStr/'grid.shp'), 'grid')
             b_removed = QgsVectorLayer(str(workspace/'data/restriction/bati_removed.shp'), 'b_removed')
             cimetiere = QgsVectorLayer(str(workspace/'data/2014_bati/cimetiere.shp'), 'cimetiere')
+            t_sport = QgsVectorLayer(str(workspace/'data/2014_bati/terrain_sport.shp'), 't_sport')
+            c_surf = QgsVectorLayer(str(workspace/'data/2014_bati/construction_surfacique.shp'), 'c_surf')
             s_eau = QgsVectorLayer(str(workspace/'data/restriction/surface_eau.shp'), 's_eau')
 
-            restrictList = [b_removed, cimetiere, s_eau]
+            restrictList = [b_removed, cimetiere, s_eau, t_sport, c_surf]
             restrictGrid(restrictList, grid, maxOverlapRatio, workspace/'data'/pixResStr/'restrict')
-            del b_removed, cimetiere, s_eau, restrictList, grid
+            del b_removed, cimetiere, s_eau, t_sport, restrictList, grid
 
-        # if not (workspace/'data'/pixResStr/'tif').exists():
-        #     start_time = time()
-        #     description = "computing interest rasters "
-        #     progres = "6.5/8 : %s"%(description)
-        #     printer(progres)
+        if not (workspace/'data'/pixResStr/'tif').exists():
+            start_time = time()
+            description = "computing interest rasters "
+            progres = "6.5/8 : %s"%(description)
+            printer(progres)
             os.mkdir(str(workspace/'data'/pixResStr/'tif'))
             os.mkdir(str(workspace/'data'/pixResStr/'tif/tmp'))
             # Objet pour transformation de coordonées
@@ -1809,7 +1809,6 @@ with (project/(strftime('%Y%m%d%H%M') + '_log.txt')).open('w') as log:
         # Rasterisations
         argList = [
             (workspace/'data'/pixResStr/'stat_iris.shp', project/'iris_id.tif', 'UInt8', 'ID_IRIS'),
-            # (workspace/'data'/pixResStr/'stat_iris.shp', project/'iris_ssr_med.tif', 'UInt16', 'ssr_med'),
             (workspace/'data'/pixResStr/'stat_iris.shp', project/'iris_tx_ssr.tif', 'Float32', 'tx_ssr'),
             (workspace/'data'/pixResStr/'stat_iris.shp', project/'iris_m2_hab.tif', 'UInt16', 'm2_hab'),
             (workspace/'data'/pixResStr/'stat_grid.shp', project/'demographie.tif', 'UInt16', 'pop'),
@@ -1821,6 +1820,9 @@ with (project/(strftime('%Y%m%d%H%M') + '_log.txt')).open('w') as log:
         if (workspace/'data/plu.shp').exists():
             argList.append((workspace/'data/plu.shp', project/'interet/plu_restriction.tif', 'Byte', 'restrict'))
             argList.append((workspace/'data/plu.shp', project/'interet/plu_priorite.tif', 'Byte', 'priority'))
+            pluPrio = True
+        else:
+            pluPrio = None
 
         if speed :
             getDone(rasterize, argList)
@@ -1834,11 +1836,15 @@ with (project/(strftime('%Y%m%d%H%M') + '_log.txt')).open('w') as log:
         geot = ds.GetGeoTransform()
         ds = None
 
+        irisMask = to_array(workspace/'data'/pixResStr/'tif/masque.tif', np.byte)
         # Conversion des rasters de distance
         distance_routes = to_array(workspace/'data'/pixResStr/'tif/distance_routes.tif', np.float32)
         routes = np.where(distance_routes > -1, 1 - (distance_routes / np.amax(distance_routes)), 0)
+        routes = np.where(irisMask == 1, 0, routes)
         distance_transport = to_array(workspace/'data'/pixResStr/'tif/distance_arrets_transport.tif', np.float32)
         transport = np.where(distance_transport > -1, 1 - (distance_transport / np.amax(distance_transport)), 0)
+        transport = np.where(irisMask == 1, 0, transport)
+
         # Conversion et aggrégation des rasters de densité SIRENE
         with (globalData/'sirene/poids.csv').open('r') as csvFile:
             reader = csv.reader(csvFile)
@@ -1859,9 +1865,9 @@ with (project/(strftime('%Y%m%d%H%M') + '_log.txt')).open('w') as log:
         sirene = ((administratif * poidsSirene['administratif']) + (commercial * poidsSirene['commercial']) + (enseignement * poidsSirene['enseignement']) +
                   (medical * poidsSirene['medical']) + (recreatif * poidsSirene['recreatif'])) / sum(poidsSirene.values())
         sirene = (sirene / np.amax(sirene)).astype(np.float32)
+        sirene = np.where(irisMask == 1, 0, sirene)
 
         # Création du raster de restriction (sans PLU)
-        irisMask = to_array(workspace/'data'/pixResStr/'tif/masque.tif', np.byte)
         surfActivMask = to_array(workspace/'data'/pixResStr/'tif/surf_activ_non_com.tif', np.byte)
         gridMask = to_array(workspace/'data'/pixResStr/'tif/restrict_grid.tif', np.byte)
         zonageMask = to_array(workspace/'data'/pixResStr/'tif/zonages_protection.tif', np.byte)
@@ -1871,8 +1877,13 @@ with (project/(strftime('%Y%m%d%H%M') + '_log.txt')).open('w') as log:
         slope = to_array(str(workspace/'data'/pixResStr/'tif/slope.tif'))
         slopeMask = np.where(slope > maxSlope, 1, 0).astype(np.byte)
         # Fusion
-        restriction = np.where((irisMask == 1) | (surfActivMask == 1) | (gridMask == 1) | (roadsMask == 1) |
+        restriction = np.where((surfActivMask == 1) | (gridMask == 1) | (roadsMask == 1) |
                                (railsMask == 1) | (zonageMask == 1) | (highwayMask == 1) | (slopeMask == 1), 1, 0)
+
+        restriction = np.where(irisMask == 1, 0, restriction)
+        if pluPrio:
+            pluPrio = to_array(project/'interet/plu_priorite.tif', np.byte)
+            restriction = np.where(pluPrio == 1, 0, restriction)
 
         if (workspace/'data'/pixResStr/'tif/ppri.tif').exists():
             ppriMask = to_array(workspace/'data'/pixResStr/'tif/ppri.tif', np.byte)
@@ -1890,7 +1901,7 @@ with (project/(strftime('%Y%m%d%H%M') + '_log.txt')).open('w') as log:
         if (workspace/'data'/pixResStr/'tif/ecologie.tif').exists():
             ecologie = to_array(workspace/'data'/pixResStr/'tif/ecologie.tif', np.float32)
             ecologie = np.where(ecologie == 0, 0, 1 - ecologie)
-            ecologie = np.where(restriction == 1, 0, ecologie)
+            ecologie = np.where(irisMask == 1, 0, ecologie)
             to_tif(ecologie, 'float32', proj, geot, project/'interet/non-importance_ecologique.tif')
         else:
             rasterize(workspace/'data/ocsol.shp', project/'interet/non-importance_ecologique.tif', 'Float32', 'interet')

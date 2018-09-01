@@ -117,13 +117,13 @@ if 'densifyOld' not in globals():
     densifyOld = False
 # Paramètres pour les règles de contiguïtés """fractales""" -_-
 if 'winSize' not in globals():
-    winSize = 3
+    winSize = 5
 if 'minContig' not in globals():
-    minContig = 0.1
+    minContig = 0.11
 if 'maxContig' not in globals():
-    maxContig = 0.8
+    maxContig = 0.77
 if 'tiffs' not in globals():
-    tiffs = False
+    tiffs = True
 if 'snaps' not in globals():
     snaps = False
 if 'verbose' not in globals():
@@ -143,7 +143,8 @@ if minContig > maxContig:
 # Intialisation de la seed du RNG
 # np.random.seed(seed)
 
-def parseDistrib(file, type=None, fit=True):
+# Pour convertir les distribution en dictionnaires
+def parseDistrib(file, type=None, fit=True, fitIndicator='AIC'):
     poids = {}
     for i in range(nbIris):
         poids[i+1] = {}
@@ -154,13 +155,27 @@ def parseDistrib(file, type=None, fit=True):
             if type == 'floors':
                 id = int(values[1].replace('"',''))
                 etages = int(values[2].replace('"',''))
-                # AIC=[4] ; Chi²=[5]
-                poids[id][etages] = float(values[5].replace('\n','')) if 'NA' not in values[5] else 0
+                if fitIndicator == 'AIC':
+                    f = 4
+                elif fitIndicator == 'Chi2':
+                    f = 5
+
+                poids[id][etages] = float(values[f].replace('\n','')) if 'NA' not in values[f] else 0
+
             elif type == 'surf':
+                if fitIndicator == 'AIC':
+                    f = 5
+                elif fitIndicator == 'KS':
+                    f = 4
+                elif fitIndicator == 'CVM':
+                    f = 3
+                elif fitIndicator == 'AD':
+                    f = 2
+
                 id = int(values[6].replace('"','').replace('\n',''))
                 surf = float(values[1])
-                # AD=[2] ; CVM=[3] ; KS=[4] ; AIC=[5] ;
-                poids[id][surf] = float(values[4])
+                poids[id][surf] = float(values[f])
+
         else:
             id = int(values[0])
             dist = int(values[1])
@@ -538,7 +553,6 @@ with (project/'log.txt').open('w') as log, (project/'output/mesures.csv').open('
         demographie14 = to_array(dataDir/'demographie.tif', np.uint16)
         srfSol14 = to_array(dataDir/'srf_sol.tif', np.uint16)
         srfSolRes14 = to_array(dataDir/'srf_sol_res.tif', np.uint16)
-        ssrMed = to_array(dataDir/'iris_ssr_med.tif', np.uint16)
         m2PlaHab = to_array(dataDir/'iris_m2_hab.tif', np.uint16)
         m2PlaHab = np.where(m2PlaHab > maxUsedSrfPla, maxUsedSrfPla, m2PlaHab)
         srfPla14 = to_array(dataDir/'srf_pla.tif', np.uint16)
@@ -552,6 +566,8 @@ with (project/'log.txt').open('w') as log, (project/'output/mesures.csv').open('
         # Création du raster final d'intérêt avec pondération
         interet = np.where((restriction != 1), (eco * coef['ecologie']) + (rou * coef['routes']) + (tra * coef['transport']) + (sir * coef['sirene']), 0)
         interet = (interet / np.amax(interet)).astype(np.float32)
+        interetComplet = (eco * coef['ecologie']) + (rou * coef['routes']) + (tra * coef['transport']) + (sir * coef['sirene'])
+        interetComplet = (interetComplet / np.amax(interetComplet)).astype(np.float32)
 
         # Création des rasters de capacité en surfaces sol et plancher
         capaSol = np.zeros([rows, cols], np.uint16) + srfCell * maxBuiltRatio / 100
@@ -571,6 +587,7 @@ with (project/'log.txt').open('w') as log, (project/'output/mesures.csv').open('
             to_tif(capaSol, 'uint16', proj, geot, project/'capacite_sol.tif')
             to_tif(txArtif, 'float32', proj, geot, project/'taux_artif.tif')
             to_tif(interet, 'float32', proj, geot, project/'interet.tif')
+            to_tif(interetComplet, 'float32', proj, geot, project/'interet_complet.tif')
             to_tif(ratioPlaSol14, 'float32', proj, geot, project/'ratio_plancher_sol.tif')
 
         # Début de la simulation
