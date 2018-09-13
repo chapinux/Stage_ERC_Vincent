@@ -99,10 +99,10 @@ if 'pluPriority' not in globals():
     pluPriority = True
 # Pour seuiller l'artificialisation d'une cellule dans le raster de capacité au sol
 if 'maxBuiltRatio' not in globals():
-    maxBuiltRatio = 80
+    maxBuiltRatio = 50
 # Taux pour exclure de la couche d'intérêt les cellules déjà artificialisées
 if 'exclusionRatio' not in globals():
-    exclusionRatio = 0.5
+    exclusionRatio = 0.1
 # Pour seuiller le nombre de mètres carrés utilisés par habitants et par iris, à laisser fixe de préférence (quelques IRIS a + de 300m² par habitants)
 if 'maxUsedSrfPla' not in globals():
     maxUsedSrfPla = 200
@@ -160,7 +160,8 @@ def parseDistrib(file, type=None, fit=True, fitIndicator='AIC'):
                 elif fitIndicator == 'Chi2':
                     f = 5
 
-                poids[id][etages] = float(values[f].replace('\n','')) if 'NA' not in values[f] else 0
+                if id in poids.keys():
+                    poids[id][etages] = float(values[f].replace('\n','')) if 'NA' not in values[f] else 0
 
             elif type == 'surf':
                 if fitIndicator == 'AIC':
@@ -179,7 +180,8 @@ def parseDistrib(file, type=None, fit=True, fitIndicator='AIC'):
         else:
             id = int(values[0])
             dist = int(values[1])
-            poids[id][dist] = float(values[3])
+            if id in poids.keys():
+                poids[id][dist] = float(values[3])
     return poids
 
 # Tirage pondéré qui retourne un tuple d'index (row, col)
@@ -201,13 +203,13 @@ def chooseCell(weight):
 
 def chooseArea(id, row, col):
     ss = 0
-    surf = np.array(list(poidsSurfaces[id].keys()))
-    pds = np.array(list(poidsSurfaces[id].values()))
-    if len(surf) > 0 and sum(pds) > 0 :
-        c = np.random.choice(surf, 1, p=pds/pds.sum())
-        if c[0] > 0:
-            ss = float(c[0])
-    else:
+    # surf = np.array(list(poidsSurfaces[id].keys()))
+    # pds = np.array(list(poidsSurfaces[id].values()))
+    # if len(surf) > 0 and sum(pds) > 0 :
+    #     c = np.random.choice(surf, 1, p=pds/pds.sum())
+    #     if c[0] > 0:
+    #         ss = float(c[0])
+    if id in poidsSurfacesNoFit.keys():
         surf = np.array(list(poidsSurfacesNoFit[id].keys()))
         pds = np.array(list(poidsSurfacesNoFit[id].values()))
         if len(surf) > 0 and sum(pds) > 0 :
@@ -526,8 +528,8 @@ with (project/'log.txt').open('w') as log, (project/'output/mesures.csv').open('
         # Enregistrements des poids pour le tirage des étages et surface
         with (dataDir/'poids_etages.csv').open('r') as r:
             poidsEtages = parseDistrib(r, 'floors')
-        with (dataDir/'poids_surfaces.csv').open('r') as r:
-            poidsSurfaces = parseDistrib(r, 'surf')
+        # with (dataDir/'poids_surfaces.csv').open('r') as r:
+        #     poidsSurfaces = parseDistrib(r, 'surf')
         with (dataDir/'poids_etages_nofit.csv').open('r') as r:
             poidsEtagesNoFit = parseDistrib(r, fit = False)
         with (dataDir/'poids_surfaces_nofit.csv').open('r') as r:
@@ -641,7 +643,7 @@ with (project/'log.txt').open('w') as log, (project/'output/mesures.csv').open('
         srfSolNouv = srfSol - srfSol14
         srfPlaNouv = srfPla - srfPla14
         densifSol = np.where((srfSol > srfSol14) & (urb14 == 1), 1, 0)
-        densifPla = np.where((srfPla > srfPla14) & (urb14 == 1), 1, 0)
+        densifPla = np.where((srfPla > srfPla14) & (urb14 == 1) & (srfSol == srfSol14), 1, 0)
         txArtifNouv = (srfSolNouv / srfCell).astype(np.float32)
         txArtifMoyen = round(np.nanmean(np.where(txArtifNouv == 0, np.nan, txArtifNouv)) * 100, 3)
         txArtifFinal = (srfSol / srfCell).astype(np.float32)
@@ -662,7 +664,7 @@ with (project/'log.txt').open('w') as log, (project/'output/mesures.csv').open('
             to_tif(demographie, 'uint16', proj, geot, project/('output/demographie_' + str(finalYear) + '.tif'))
             to_tif(ratioPlaSol, 'float32', proj, geot, project/('output/ratio_plancher_sol_' + str(finalYear) + '.tif'))
             to_tif(txArtifFinal, 'float32', proj, geot, project/('output/taux_artif_' + str(finalYear) + '.tif'))
-            to_tif(impactEnv, 'float32', proj, geot, project/('output/impact_envionnemental.tif'))
+            to_tif(impactEnv, 'float32', proj, geot, project/('output/impact_environnemental.tif'))
             to_tif(expansion, 'byte', proj, geot, project/'output/expansion.tif')
             to_tif(srfSolNouv, 'uint16', proj, geot, project/'output/surface_sol_construite.tif')
             to_tif(srfPlaNouv, 'uint16', proj, geot, project/'output/surface_plancher_construite.tif')

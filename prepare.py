@@ -146,8 +146,9 @@ if 'roadDist' not in globals():
     roadDist = 300
 if 'transDist' not in globals():
     transDist = 200
+# En degrés, = 30 %
 if 'maxSlope' not in globals():
-    maxSlope = 30
+    maxSlope = 16.7
 if 'force' not in globals():
     force = False
 if 'speed' not in globals():
@@ -307,24 +308,6 @@ def rasterize(vector, output, dtype, field=None, burn=None, inverse=False, touch
 
 # Nettoye une couche de bâtiments et génère les champs utiles à l'estimation de population
 def buildingCleaner(buildings, sMin, sMax, lvlHeight, polygons, points, cleanedOut, removedOut):
-    # Selection des bâtiments situés dans polygones
-    for layer in polygons:
-        params = {
-            'INPUT': buildings,
-            'PREDICATE': 6,
-            'INTERSECT': layer,
-            'METHOD': 1
-        }
-        processing.run('native:selectbylocation', params, feedback=feedback)
-    # Selection si la bâtiment intersecte des points
-    for layer in points:
-        params = {
-            'INPUT': buildings,
-            'PREDICATE': 0,
-            'INTERSECT': layer,
-            'METHOD': 1
-        }
-        processing.run('native:selectbylocation', params, feedback=feedback)
     # Estimation du nombre d'étages
     expr = """ CASE
         WHEN "HAUTEUR" = 0 THEN 1
@@ -336,9 +319,29 @@ def buildingCleaner(buildings, sMin, sMax, lvlHeight, polygons, points, cleanedO
     params = {
         'INPUT': buildings,
         'EXPRESSION': ' $area < ' + str(sMin) + ' OR $area > ' + str(sMax),
-        'METHOD': 1
+        'METHOD': 0
     }
     processing.run('qgis:selectbyexpression', params, feedback=feedback)
+    # Selection des bâtiments situés dans polygones # DAMN IT
+    for layer in polygons:
+        params = {
+            'INPUT': buildings,
+            'PREDICATE': 6,
+            'INTERSECT': layer,
+            'METHOD': 1
+        }
+        processing.run('native:selectbylocation', params, feedback=feedback)
+
+    # Selection si le bâtiment intersecte des points
+    for layer in points:
+        params = {
+            'INPUT': buildings,
+            'PREDICATE': 0,
+            'INTERSECT': layer,
+            'METHOD': 1
+        }
+        processing.run('native:selectbylocation', params, feedback=feedback)
+
     params = {
         'INPUT': buildings,
         'OUTPUT': removedOut
@@ -351,7 +354,7 @@ def buildingCleaner(buildings, sMin, sMax, lvlHeight, polygons, points, cleanedO
         'OUTPUT': cleanedOut
     }
     processing.run('native:saveselectedfeatures', params, feedback=feedback)
-    del buildings, polygons, points, layer
+    del buildings, polygons, points
 
 # Génère les statistiques de construction entre deux dates pour la grille et les IRIS
 def urbGridStat(name, path, iris, grid, outCsvDir):
@@ -1233,6 +1236,20 @@ with (project/(strftime('%Y%m%d%H%M') + '_log.txt')).open('w') as log:
                 del fields
                 argList.append((clip(ecologie, zone), workspace/'data/'))
 
+            elif (globalData/'eco/apb_gs_pnr_rbl_rbp_snc_rnn_rnr_ram_scl_srce_C_srceR_zh_zico_zn1_zn2_zps_zsc_occsol16_x_ZOOM.shp').exists():
+                biotope = True
+                ecologie = QgsVectorLayer(str(globalData/'eco/apb_gs_pnr_rbl_rbp_snc_rnn_rnr_ram_scl_srce_C_srceR_zh_zico_zn1_zn2_zps_zsc_occsol16_x_ZOOM.shp'), 'ecologie')
+                params = {'INPUT': ecologie, 'OUTPUT': 'memory:ecologie'}
+                res = processing.run('native:fixgeometries', params, feedback=feedback)
+                ecologie = res['OUTPUT']
+                argList.append((clip(ecologie, zone), workspace/'data/'))
+
+            if (localData/'agro_restriction.shp').exists():
+                agro_restriction = QgsVectorLayer(str(localData/'agro_restriction.shp'), 'agro_restriction')
+                params = {'INPUT': agro_restriction, 'OUTPUT': 'memory:agro_restriction'}
+                res = processing.run('native:fixgeometries', params, feedback=feedback)
+                agro_restriction = res['OUTPUT']
+                argList.append((clip(agro_restriction, zone), workspace/'data/'))
 
             # Traitement d'une couche facultative du PPRI local : extraction des zones de restriction
             if (localData/'ppri.shp').exists():
@@ -1267,9 +1284,8 @@ with (project/(strftime('%Y%m%d%H%M') + '_log.txt')).open('w') as log:
                     'OUTPUT':'memory:ppri'
                 }
                 res = processing.run('native:fixgeometries', params, feedback=feedback)
-                ppri = res['OUTPUT']
                 params = {
-                    'INPUT': ppri,
+                    'INPUT': res['OUTPUT'],
                     'EXPRESSION': expr,
                     'OUTPUT': 'memory:ppri',
                     'FAIL_OUTPUT': 'memory:'
@@ -1277,6 +1293,16 @@ with (project/(strftime('%Y%m%d%H%M') + '_log.txt')).open('w') as log:
                 res = processing.run('native:extractbyexpression', params, feedback=feedback)
                 ppri = res['OUTPUT']
                 argList.append((clip(ppri, zone), workspace/'data/restriction/'))
+
+            elif (globalData/'azi').exists():
+                azi = QgsVectorLayer(str(globalData/'azi/r_azi_zone_inond_pot_s_r76.shp'), 'azi')
+                params = {
+                    'INPUT': azi,
+                    'OUTPUT':'memory:azi'
+                }
+                res = processing.run('native:fixgeometries', params, feedback=feedback)
+                azi = res['OUTPUT']
+                argList.append((clip(azi, zone), workspace/'data/restriction/'))
 
             # Utilisation des parcelles DGFIP pour exclure des bâtiments lors du calcul de densité
             if (globalData/('majic/exclusion_parcelles_' + dpt + '.shp')).exists():
@@ -1299,6 +1325,8 @@ with (project/(strftime('%Y%m%d%H%M') + '_log.txt')).open('w') as log:
                     reproj(*a)
 
             del ocsol
+            if 'azi' in globals():
+                del azi
             if 'ecologie' in globals():
                 del ecologie
             if 'ppri' in globals():
@@ -1326,24 +1354,25 @@ with (project/(strftime('%Y%m%d%H%M') + '_log.txt')).open('w') as log:
             del zonagesEnv
 
             # Traitement des autoroutes : bande de 100m de part et d'autre
-            params = {
-                'INPUT': str(workspace/'data/transport/route_primaire.shp'),
-                'EXPRESSION': """ "NATURE" = 'Autoroute' """,
-                'OUTPUT': 'memory:autoroutes',
-                'FAIL_OUTPUT': 'memory:'
-            }
-            res = processing.run('native:extractbyexpression', params, feedback=feedback)
-            params = {
-                'INPUT': res['OUTPUT'],
-                'DISTANCE': 100,
-                'SEGMENTS': 5,
-                'END_CAP_STYLE': 0,
-                'JOIN_STYLE': 0,
-                'MITER_LIMIT': 2,
-                'DISSOLVE': True,
-                'OUTPUT': str(workspace/'data/restriction/tampon_autoroutes.shp')
-            }
-            processing.run('native:buffer', params, feedback=feedback)
+            if studyAreaName != 'pyr':
+                params = {
+                    'INPUT': str(workspace/'data/transport/route_primaire.shp'),
+                    'EXPRESSION': """ "NATURE" = 'Autoroute' """,
+                    'OUTPUT': 'memory:autoroutes',
+                    'FAIL_OUTPUT': 'memory:'
+                }
+                res = processing.run('native:extractbyexpression', params, feedback=feedback)
+                params = {
+                    'INPUT': res['OUTPUT'],
+                    'DISTANCE': 100,
+                    'SEGMENTS': 5,
+                    'END_CAP_STYLE': 0,
+                    'JOIN_STYLE': 0,
+                    'MITER_LIMIT': 2,
+                    'DISSOLVE': True,
+                    'OUTPUT': str(workspace/'data/restriction/tampon_autoroutes.shp')
+                }
+                processing.run('native:buffer', params, feedback=feedback)
             # Traitement des autres routes : bande de 75m ===> voir Loi Barnier
             params = {
                 'INPUT': str(workspace/'data/transport/route_primaire.shp'),
@@ -1441,7 +1470,6 @@ with (project/(strftime('%Y%m%d%H%M') + '_log.txt')).open('w') as log:
                 processing.run('native:buffer', params, feedback=feedback)
                 parcelles = res['OUTPUT']
                 cleanPolygons.append(parcelles)
-                del parcelles
 
             # Sinon, on utliser les surfaces d'activité et les PAI
             else:
@@ -1456,8 +1484,8 @@ with (project/(strftime('%Y%m%d%H%M') + '_log.txt')).open('w') as log:
                 cleanPolygons.append(res['OUTPUT'])
 
             # Couche pour zone supplémentaires à exclure du calcul de pop à inclure dans les restrictions
-            if (workspace/'data/restriction/exclusion_manuelle.shp').exists():
-                cleanPolygons.append(str(workspace/'data/restriction/exclusion_manuelle.shp'))
+#            if (workspace/'data/restriction/exclusion_manuelle.shp').exists():
+#                cleanPolygons.append(str(workspace/'data/restriction/exclusion_manuelle.shp'))
 
             buildingCleaner(bati_indif, minSurf, maxSurf, levelHeight, cleanPolygons, cleanPoints,
                             str(workspace/'data/2014_bati/bati_clean.shp'), str(workspace/'data/restriction/bati_removed.shp'))
@@ -1469,14 +1497,14 @@ with (project/(strftime('%Y%m%d%H%M') + '_log.txt')).open('w') as log:
             iris = QgsVectorLayer(str(workspace/'data/iris.shp'), 'iris')
             iris.addExpressionField('$id + 1', QgsField('ID_IRIS', QVariant.Int, len=4))
             params = {
-                'INPUT': str(workspace/'data/2014_bati/bati_clean.shp'),
+                'INPUT': bati_clean,
                 'OVERLAY': iris,
                 'INPUT_FIELDS': ['ID', 'HAUTEUR', 'NB_NIV'],
                 'OVERLAY_FIELDS': ['CODE_IRIS', 'ID_IRIS', 'NOM_IRIS', 'TYP_IRIS', 'POP14', 'TXRP14'],
                 'OUTPUT': str(workspace/'data/2014_bati/bati_inter_iris.shp')
             }
             processing.run('native:intersection', params, feedback=feedback)
-            log.write(getTime(start_time) + '\n')
+            #log.write(getTime(start_time) + '\n')
             del iris
 
         if not (workspace/'data'/pixResStr).exists():
@@ -1579,11 +1607,14 @@ with (project/(strftime('%Y%m%d%H%M') + '_log.txt')).open('w') as log:
             restrictGrid(restrictList, grid, maxOverlapRatio, workspace/'data'/pixResStr/'restrict')
             del b_removed, cimetiere, s_eau, t_sport, restrictList, grid
 
-        if not (workspace/'data'/pixResStr/'tif').exists():
-            start_time = time()
-            description = "computing interest rasters "
-            progres = "6.5/8 : %s"%(description)
-            printer(progres)
+        # if not (workspace/'data'/pixResStr/'tif').exists():
+            if studyAreaName != 'mtp':
+                biotope = True
+        #     start_time = time()
+        #     etape = 6.5
+        #     description = "computing interest rasters "
+        #     progres = "%s/8 : %s"%(str(etape), description)
+        #     printer(progres)
             os.mkdir(str(workspace/'data'/pixResStr/'tif'))
             os.mkdir(str(workspace/'data'/pixResStr/'tif/tmp'))
             # Objet pour transformation de coordonées
@@ -1618,8 +1649,7 @@ with (project/(strftime('%Y%m%d%H%M') + '_log.txt')).open('w') as log:
             gdal.DEMProcessing(
                 str(workspace/'data'/pixResStr/'tif/slope.tif'),
                 str(workspace/'data'/pixResStr/'tif/mnt.tif'),
-                'slope', format='GTiff',
-                slopeFormat='percent'
+                'slope', format='GTiff'
             )
 
             # Chaîne à passer à QGIS pour l'étendue des rasterisations
@@ -1632,11 +1662,13 @@ with (project/(strftime('%Y%m%d%H%M') + '_log.txt')).open('w') as log:
                 (workspace/'data'/pixResStr/'restrict/restrict_grid.shp', workspace/'data'/pixResStr/'tif/restrict_grid.tif', 'Byte', 'restrict'),
                 (workspace/'data'/pixResStr/'stat_iris.shp', workspace/'data'/pixResStr/'tif/masque.tif', 'Byte', None, 1, True),
                 (workspace/'data/restriction/tampon_voies_ferrees.shp', workspace/'data'/pixResStr/'tif/tampon_voies_ferrees.tif', 'Byte', None, 1),
-                (workspace/'data/restriction/tampon_autoroutes.shp', workspace/'data'/pixResStr/'tif/tampon_autoroutes.tif', 'Byte', None, 1),
                 (workspace/'data/restriction/tampon_routes_importantes.shp', workspace/'data'/pixResStr/'tif/tampon_routes_importantes.tif', 'Byte', None, 1),
                 (workspace/'data/restriction/zonages_protection.shp', workspace/'data'/pixResStr/'tif/zonages_protection.tif', 'Byte', None, 1),
                 (workspace/'data/pai/surf_activ_non_com.shp', workspace/'data'/pixResStr/'tif/surf_activ_non_com.tif', 'Byte', None, 1)
             ]
+
+            if (workspace/'data/restriction/tampon_autoroutes.shp').exists():
+                argList.append((workspace/'data/restriction/tampon_autoroutes.shp', workspace/'data'/pixResStr/'tif/tampon_autoroutes.tif', 'Byte', None, 1))
 
             if (workspace/'data/restriction/exclusion_parcelles.shp').exists():
                 argList.append((workspace/'data/restriction/exclusion_parcelles.shp', workspace/'data'/pixResStr/'tif/exclusion_parcelles.tif', 'Byte', None, 1))
@@ -1646,6 +1678,9 @@ with (project/(strftime('%Y%m%d%H%M') + '_log.txt')).open('w') as log:
             if (workspace/'data/restriction/ppri.shp').exists():
                 argList.append((workspace/'data/restriction/ppri.shp', workspace/'data'/pixResStr/'tif/ppri.tif', 'Byte', None, 1))
 
+            if (workspace/'data/agro_restriction.shp').exists():
+                argList.append((workspace/'data/agro_restriction.shp', workspace/'data'/pixResStr/'tif/agro_restriction.tif', 'Byte', None, 1))
+
             # Solution de repli si on a les zonnes PPRI dans le PLU
             elif (workspace/'data/plu.shp').exists():
                 layer = QgsVectorLayer(str(workspace/'data/plu.shp'), 'plu')
@@ -1653,6 +1688,9 @@ with (project/(strftime('%Y%m%d%H%M') + '_log.txt')).open('w') as log:
                 if 'ppri' in fields:
                     argList.append((workspace/'data/plu.shp', workspace/'data'/pixResStr/'tif/ppri.tif', 'Byte', 'ppri'))
                 del layer, fields
+
+            elif (workspace/'data/restriction/azi.shp').exists():
+                argList.append((workspace/'data/restriction/azi.shp', workspace/'data'/pixResStr/'tif/azi.tif', 'Byte', None, 1))
 
             if (workspace/'data/restriction/compensation.shp').exists():
                 argList.append((workspace/'data/restriction/compensation.shp', workspace/'data'/pixResStr/'tif/compensation.tif', 'Byte', None, 1))
@@ -1665,8 +1703,15 @@ with (project/(strftime('%Y%m%d%H%M') + '_log.txt')).open('w') as log:
                     xRes=pixRes, yRes=pixRes,
                     outputBounds=(xMin, yMin, xMax, yMax)
                 )
+
             elif (workspace/'data/ecologie.shp').exists():
-                argList.append((workspace/'data/ecologie.shp', workspace/'data'/pixResStr/'tif/ecologie.tif', 'Float32', 'taux'))
+                ecologie = QgsVectorLayer(str(workspace/'data/ecologie.shp'), 'ecologie')
+                if biotope :
+                    ecologie.addExpressionField('"NOTE_NATU" / maximum("NOTE_NATU")', QgsField('taux', QVariant.Double, len=10, prec=6))
+                    to_shp(ecologie, workspace/'data/ecologie_biotope.shp')
+                    argList.append((workspace/'data/ecologie_biotope.shp', workspace/'data'/pixResStr/'tif/ecologie.tif', 'Float32', 'taux'))
+                else :
+                    argList.append((workspace/'data/ecologie.shp', workspace/'data'/pixResStr/'tif/ecologie.tif', 'Float32', 'taux'))
 
             if speed:
                 getDone(rasterize, argList)
@@ -1743,27 +1788,27 @@ with (project/(strftime('%Y%m%d%H%M') + '_log.txt')).open('w') as log:
                         +  ' > ' + str(workspace/'data'/pixResStr/'fitting/Rlog_surf.txt'), shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             log.write(getTime(start_time) + '\n')
 
-        else:
-            fitResults = os.listdir(str(workspace/'data'/pixResStr/'fitting'))
-            if 'floors_weights.csv' not in fitResults or 'surf_weights.csv' not in fitResults:
-                start_time = time()
-                etape = 7
-                description = "trying to fit floors and surfaces distributions "
-                progres = "%i/8 : %s" %(etape, description)
-                printer(progres)
-                log.write(description + ': ')
-
-                scriptDir = Path(__file__).absolute().parent
-                if 'floors_weights.csv' not in fitResults:
-                    subprocess.run('Rscript ' + str(scriptDir/'fitting/fit_floors.R') + ' ' + str(workspace/'data'/pixResStr)
-                                +  ' > ' + str(workspace/'data'/pixResStr/'fitting/Rlog_floors.txt'), shell=True)
-
-                if 'surf_weights.csv' not in fitResults:
-                    subprocess.run('Rscript ' + str(scriptDir/'fitting/fit_surf.R') + ' ' + str(workspace/'data'/pixResStr)
-                                +  ' > ' + str(workspace/'data'/pixResStr/'fitting/Rlog_surf.txt'), shell=True)
-                    log.write(getTime(start_time) + '\n')
-
-                log.write(getTime(start_time) + '\n')
+        # else:
+        #     fitResults = os.listdir(str(workspace/'data'/pixResStr/'fitting'))
+        #     if 'floors_weights.csv' not in fitResults or 'surf_weights.csv' not in fitResults:
+        #         start_time = time()
+        #         etape = 7
+        #         description = "trying to fit floors and surfaces distributions "
+        #         progres = "%i/8 : %s" %(etape, description)
+        #         printer(progres)
+        #         log.write(description + ': ')
+        #
+        #         scriptDir = Path(__file__).absolute().parent
+        #         if 'floors_weights.csv' not in fitResults:
+        #             subprocess.run('Rscript ' + str(scriptDir/'fitting/fit_floors.R') + ' ' + str(workspace/'data'/pixResStr)
+        #                         +  ' > ' + str(workspace/'data'/pixResStr/'fitting/Rlog_floors.txt'), shell=True)
+        #
+        #         if 'surf_weights.csv' not in fitResults:
+        #             subprocess.run('Rscript ' + str(scriptDir/'fitting/fit_surf.R') + ' ' + str(workspace/'data'/pixResStr)
+        #                         +  ' > ' + str(workspace/'data'/pixResStr/'fitting/Rlog_surf.txt'), shell=True)
+        #             log.write(getTime(start_time) + '\n')
+        #
+        #         log.write(getTime(start_time) + '\n')
 
         start_time = time()
         etape = 8
@@ -1773,7 +1818,7 @@ with (project/(strftime('%Y%m%d%H%M') + '_log.txt')).open('w') as log:
         log.write(description + ': ')
 
         try:
-            copyfile(str(workspace/'data'/pixResStr/'fitting/surf_weights.csv'), str(project/'poids_surfaces.csv'))
+#            copyfile(str(workspace/'data'/pixResStr/'fitting/surf_weights.csv'), str(project/'poids_surfaces.csv'))
             copyfile(str(workspace/'data'/pixResStr/'fitting/floors_weights.csv'), str(project/'poids_etages.csv'))
             copyfile(str(workspace/'data'/pixResStr/'fitting/surf_weights_nofit.csv'), str(project/'poids_surfaces_nofit.csv'))
             copyfile(str(workspace/'data'/pixResStr/'fitting/floors_weights_nofit.csv'), str(project/'poids_etages_nofit.csv'))
@@ -1871,23 +1916,29 @@ with (project/(strftime('%Y%m%d%H%M') + '_log.txt')).open('w') as log:
         surfActivMask = to_array(workspace/'data'/pixResStr/'tif/surf_activ_non_com.tif', np.byte)
         gridMask = to_array(workspace/'data'/pixResStr/'tif/restrict_grid.tif', np.byte)
         zonageMask = to_array(workspace/'data'/pixResStr/'tif/zonages_protection.tif', np.byte)
-        highwayMask = to_array(workspace/'data'/pixResStr/'tif/tampon_autoroutes.tif', np.byte)
         roadsMask = to_array(workspace/'data'/pixResStr/'tif/tampon_routes_importantes.tif', np.byte)
         railsMask = to_array(workspace/'data'/pixResStr/'tif/tampon_voies_ferrees.tif', np.byte)
         slope = to_array(str(workspace/'data'/pixResStr/'tif/slope.tif'))
         slopeMask = np.where(slope > maxSlope, 1, 0).astype(np.byte)
         # Fusion
         restriction = np.where((surfActivMask == 1) | (gridMask == 1) | (roadsMask == 1) |
-                               (railsMask == 1) | (zonageMask == 1) | (highwayMask == 1) | (slopeMask == 1), 1, 0)
+                               (railsMask == 1) | (zonageMask == 1) | (slopeMask == 1), 1, 0)
 
-        restriction = np.where(irisMask == 1, 0, restriction)
         if pluPrio:
             pluPrio = to_array(project/'interet/plu_priorite.tif', np.byte)
             restriction = np.where(pluPrio == 1, 0, restriction)
 
+        if (workspace/'data'/pixResStr/'tif/tampon_autoroutes.tif').exists():
+            highwayMask = to_array(workspace/'data'/pixResStr/'tif/tampon_autoroutes.tif', np.byte)
+            restriction = np.where(highwayMask == 1, 0, restriction)
+
         if (workspace/'data'/pixResStr/'tif/ppri.tif').exists():
             ppriMask = to_array(workspace/'data'/pixResStr/'tif/ppri.tif', np.byte)
             restriction = np.where(ppriMask == 1, 1, restriction)
+
+        elif (workspace/'data'/pixResStr/'tif/ppri.tif').exists():
+            aziMask = to_array(workspace/'data'/pixResStr/'tif/azi.tif', np.byte)
+            restriction = np.where(aziMask == 1, 1, restriction)
 
         if (workspace/'data'/pixResStr/'tif/exclusion_manuelle.tif').exists():
             exclusionManuelle = to_array(workspace/'data'/pixResStr/'tif/exclusion_manuelle.tif', np.byte)
@@ -1896,6 +1947,12 @@ with (project/(strftime('%Y%m%d%H%M') + '_log.txt')).open('w') as log:
         if (workspace/'data'/pixResStr/'tif/compensation.tif').exists():
             compMask = to_array(workspace/'data'/pixResStr/'tif/compensation.tif', np.byte)
             restriction = np.where(compMask == 1, 1, restriction)
+
+        if (workspace/'data'/pixResStr/'tif/agro_restriction.tif').exists():
+            agriMask = to_array(workspace/'data'/pixResStr/'tif/agro_restriction.tif', np.byte)
+            restriction = np.where(agriMask == 1, 1, restriction)
+
+        restriction = np.where(irisMask == 1, 0, restriction)
 
         # Traitement de l'intérêt écologique
         if (workspace/'data'/pixResStr/'tif/ecologie.tif').exists():
@@ -1907,7 +1964,7 @@ with (project/(strftime('%Y%m%d%H%M') + '_log.txt')).open('w') as log:
             rasterize(workspace/'data/ocsol.shp', project/'interet/non-importance_ecologique.tif', 'Float32', 'interet')
 
         # Utilisation de l'OCSOL pour la restriction si la résolution le permet (ici spécifique à MTP)
-        if pixRes == 20:
+        if pixRes < 50:
             if studyAreaName == 'mtp':
                 ocs = to_array(project/'classes_ocsol.tif', np.uint16)
                 ocsMask = np.where((ocs == 2) | (ocs == 4) | (ocs == 8), 1, 0)
