@@ -687,7 +687,7 @@ with (project/'log.txt').open('w') as log, (project/'output/mesures.csv').open('
         mesures.write("Area expansion, " + str(srfSolNouv.sum()) + "\n")
         mesures.write("Built floor area, " + str(srfPlaNouv.sum()) + "\n")
         mesures.write("Cells open to urbanisation, " + str(expansionSum) + "\n")
-        mesures.write("Average artificialisation rate, " + str(txArtifMoyen) + "\n")
+        #mesures.write("Average artificialisation rate, " + str(txArtifMoyen) + "\n")
         mesures.write("Cumulated environnemental impact, " + str(int(cumImpact)) + "\n")
         mesures.write("Ground-densified cells count, " + str(dsfSol) + "\n")
         mesures.write("Floor-densified cells count, " + str(dsfPla) + "\n")
